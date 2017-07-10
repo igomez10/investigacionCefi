@@ -5,74 +5,83 @@ var bodyParser = require('body-parser');
 
 // AWS Configuration
 
-AWS.config.update({
-  region: "us-west-2",
-  endpoint: "http://dynamodb.us-west-2.amazonaws.com	"
-});
+const pool = require('./lib/db');
 
-var docClient = new AWS.DynamoDB.DocumentClient();
-
-app.get('/tables', function (req, res) {
-  res.send("{list of tables}")
-})
+//to run a query we just pass it to the pool
+//after we're done nothing has to be taken care of
+//we don't have to return any client to the pool or close a connection
 
 
-var getItem = function (params) {
+
+
+var getAll = function (tableName) {
   return new Promise(function (resolve, reject) {
-    docClient.get(params, function (err, data) {
+    pool.query('SELECT * FROM '+ tableName, function (err, res) {
       if (err) {
         reject(err);
-      } else {
-        resolve(data)
       }
-    });
-  })
+      else {
+        resolve(res);
+      }
+    })
+  }
+  )
 };
 
+app.get('/departamentos', function (req, res) {
 
-app.get('/departamento/:code', function (req, res) {
-  var params = {
-    TableName: "departamentos",
-    Key: {
-      "codigo": req.params.code,
-      "name": "hola"
-    }
-  }
-
-  var newd = getItem(params)
-  .then((data) => { res.send("<br><br><br><h1>"+JSON.stringify(data)+"</h1>") })
-  .catch((err)=>{res.send("not found or bad keys")})
+  var newd = getAll("DEPARTAMENTOS")
+    .then((data) => { res.send(JSON.stringify(data.rows)) })
+    .catch((err) => { res.send("not found or bad keys") })
 
 
 });
 
+
+app.get('/investigaciones', function(req,res){
+  var newd = getAll("INVESTIGACIONES")
+    .then((data) => { res.send(JSON.stringify(data.rows)) })
+    .catch((err) => { res.send("not found or bad keys") })
+
+});
+
+
+
+// the token is the json object to add
 app.post('/items/:token', function (req, res) {
   var propItem = JSON.parse(Buffer.from(req.params.token, 'base64').toString('utf8'));
   addItem(propItem)
-  console.log('new Item:' + propItem)
+  res.send("new Item:" + JSON.stringify(propItem))
+  console.log('new Item:' + JSON.stringify(propItem))
+})
+
+// function to add items to the table departamentos
+var addItem = function (params) {
+  return new Promise(function (resolve, reject) {
+    const finalQuery = 'INSERT INTO DEPARTAMENTOS VALUES (' + "'" + params.codigo + "', '" + params.nombre + "')";
+    console.log(finalQuery);
+    pool.query( finalQuery , function (err, res) {
+      if (err) {
+        reject(err);
+      }
+      else {
+        resolve(res);
+      }
+    })
+  }
+  )
+}
+
+app.get('/componente.js', function(req, res){
+  res.sendFile(__dirname + '/src/componente.js')
 })
 
 
-var addItem = function (params) {
-  console.log("Adding a new item...");
-  var newItem = {
-    TableName: "departamentos",
-    Item: {
-      "codigo": params.codigo,
-      "name": params.name,
-      "topics": params.topics
-    }
-  };
+app.get('/', function(req, res){
+  res.sendFile(__dirname + '/index.html')
+})
 
-  docClient.put(newItem, function (err, data) {
-    if (err) {
-      console.error("Unable to add item. Error JSON:", JSON.stringify(err, null, 2));
-    } else {
-      console.log("Added item:", JSON.stringify(data, null, 2));
-    }
-  });
 
-}
 
 app.listen(1212, function () {
   console.log('Listening on port 1212')
